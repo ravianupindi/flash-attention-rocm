@@ -8,7 +8,7 @@ from setuptools import setup, find_packages
 import subprocess
 
 import torch
-from torch.utils.cpp_extension import BuildExtension, CppExtension, CUDAExtension, CUDA_HOME
+from torch.utils.cpp_extension import BuildExtension, CppExtension, CUDAExtension, CUDA_HOME, ROCM_HOME
 
 
 with open("README.md", "r", encoding="utf-8") as fh:
@@ -50,6 +50,7 @@ def check_cuda_torch_binary_vs_bare_metal(cuda_dir):
 
 
 def raise_if_cuda_home_none(global_option: str) -> None:
+    return
     if CUDA_HOME is not None:
         return
     raise RuntimeError(
@@ -61,9 +62,10 @@ def raise_if_cuda_home_none(global_option: str) -> None:
 
 def append_nvcc_threads(nvcc_extra_args):
     _, bare_metal_major, bare_metal_minor = get_cuda_bare_metal_version(CUDA_HOME)
-    if int(bare_metal_major) >= 11 and int(bare_metal_minor) >= 2:
-        return nvcc_extra_args + ["--threads", "4"]
-    return nvcc_extra_args
+    # if int(bare_metal_major) >= 11 and int(bare_metal_minor) >= 2:
+    #     return nvcc_extra_args + ["--threads", "4"]
+    # return nvcc_extra_args
+    return nvcc_extra_args + ["--threads", "4"]
 
 
 if not torch.cuda.is_available():
@@ -79,14 +81,16 @@ if not torch.cuda.is_available():
         "If you wish to cross-compile for a single specific architecture,\n"
         'export TORCH_CUDA_ARCH_LIST="compute capability" before running setup.py.\n',
     )
-    if os.environ.get("TORCH_CUDA_ARCH_LIST", None) is None:
-        _, bare_metal_major, bare_metal_minor = get_cuda_bare_metal_version(CUDA_HOME)
-        if int(bare_metal_major) == 11:
-            os.environ["TORCH_CUDA_ARCH_LIST"] = "7.0;7.5;8.0"
-            if int(bare_metal_minor) > 0:
-                os.environ["TORCH_CUDA_ARCH_LIST"] = "7.0;7.5;8.0;8.6"
-        else:
-            os.environ["TORCH_CUDA_ARCH_LIST"] = "7.0;7.5"
+    # Setting the version explicitly
+    # if os.environ.get("TORCH_CUDA_ARCH_LIST", None) is None:
+    #     _, bare_metal_major, bare_metal_minor = get_cuda_bare_metal_version(CUDA_HOME)
+    #     if int(bare_metal_major) == 11:
+    #         os.environ["TORCH_CUDA_ARCH_LIST"] = "7.0;7.5;8.0"
+    #         if int(bare_metal_minor) > 0:
+    #             os.environ["TORCH_CUDA_ARCH_LIST"] = "7.0;7.5;8.0;8.6"
+    #     else:
+    #         os.environ["TORCH_CUDA_ARCH_LIST"] = "7.0;7.5"
+    os.environ["TORCH_CUDA_ARCH_LIST"] = "7.0;7.5;8.0;8.6"
 
 print("\n\ntorch.__version__  = {}\n\n".format(torch.__version__))
 TORCH_MAJOR = int(torch.__version__.split(".")[0])
@@ -105,9 +109,9 @@ if os.path.exists(os.path.join(torch_dir, "include", "ATen", "CUDAGeneratorImpl.
 raise_if_cuda_home_none("flash_attn")
 # Check, if CUDA11 is installed for compute capability 8.0
 cc_flag = []
-_, bare_metal_major, _ = get_cuda_bare_metal_version(CUDA_HOME)
-if int(bare_metal_major) < 11:
-    raise RuntimeError("FlashAttention is only supported on CUDA 11")
+# _, bare_metal_major, _ = get_cuda_bare_metal_version(CUDA_HOME)
+# if int(bare_metal_major) < 11:
+#     raise RuntimeError("FlashAttention is only supported on CUDA 11")
 cc_flag.append("-gencode")
 cc_flag.append("arch=compute_75,code=sm_75")
 cc_flag.append("-gencode")
@@ -130,7 +134,7 @@ ext_modules.append(
         ],
         extra_compile_args={
             "cxx": ["-O3", "-std=c++17"] + generator_flag,
-            "nvcc": append_nvcc_threads(
+            "hipcc": append_nvcc_threads(
                 [
                     "-O3",
                     "-std=c++17",
